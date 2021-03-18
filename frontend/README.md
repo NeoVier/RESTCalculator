@@ -29,3 +29,7 @@ TailwindCSS is a CSS utility-first framework, which means it's very different fr
 ### Snowpack
 
 Snowpack is a relatively new tool in the space of frontend web bundlers. It describes itself as "a lightning-fast frontend build tool, designed for the modern web.", and is an alternative to other tools such as [Webpack](https://webpack.js.org/) and [Parcel](https://parceljs.org/).
+
+## Attributions
+
+All of the icons used are from either [HeroIcons](https://heroicons.com/) or [FlatIcon](https://www.flaticon.com).

@@ -10,20 +10,7 @@ import Json.Decode
 import Json.Encode
 import List.Extra as LE
 import Svg exposing (rect, svg)
-import Svg.Attributes
-    exposing
-        ( d
-        , fill
-        , height
-        , stroke
-        , strokeLinecap
-        , strokeLinejoin
-        , strokeWidth
-        , style
-        , viewBox
-        , width
-        , y
-        )
+import Svg.Attributes exposing (d, fill, height, stroke, strokeLinecap, strokeLinejoin, strokeWidth, style, viewBox, width, y)
 
 
 
@@ -111,7 +98,7 @@ type Msg
     | ClickedOperator Operator
     | ClickedPeriod
     | ClickedEnter
-    | GotResult (Result Http.Error (Result String Float))
+    | GotResult (Result Http.Error Float)
 
 
 
@@ -203,7 +190,17 @@ update msg model =
                     ( { model | inputValue = "-" ++ model.inputValue }, Cmd.none )
 
         ClickedBackspace ->
-            ( { model | inputValue = String.dropRight 1 model.inputValue }, Cmd.none )
+            ( { model
+                | inputValue =
+                    case String.toFloat model.inputValue of
+                        Just _ ->
+                            String.dropRight 1 model.inputValue
+
+                        Nothing ->
+                            ""
+              }
+            , Cmd.none
+            )
 
         ClickedOperator operator ->
             case ( String.toFloat model.inputValue, model.firstNumber ) of
@@ -243,19 +240,11 @@ update msg model =
                     , Http.post
                         { url = expressionUrl expression "http://localhost:4000"
                         , body = Http.jsonBody (encodeExpression expression)
-                        , expect =
-                            Http.expectJson GotResult
-                                (Json.Decode.field "operationResult"
-                                    (Json.Decode.oneOf
-                                        [ Json.Decode.map Ok Json.Decode.float
-                                        , Json.Decode.map Err Json.Decode.string
-                                        ]
-                                    )
-                                )
+                        , expect = Http.expectJson GotResult (Json.Decode.field "operationResult" Json.Decode.float)
                         }
                     )
 
-        GotResult (Ok (Ok result)) ->
+        GotResult (Ok result) ->
             ( { model
                 | firstNumber = Nothing
                 , operator = Nothing
@@ -264,17 +253,8 @@ update msg model =
             , Cmd.none
             )
 
-        GotResult (Ok (Err error)) ->
-            ( { model
-                | firstNumber = Nothing
-                , operator = Nothing
-                , inputValue = error
-              }
-            , Cmd.none
-            )
-
         GotResult (Err _) ->
-            ( { model | inputValue = "Something went wrong" }, Cmd.none )
+            ( { initModel | inputValue = "Something went wrong" }, Cmd.none )
 
 
 expressionUrl : Expression -> String -> String
