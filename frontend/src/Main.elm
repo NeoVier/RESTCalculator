@@ -1,9 +1,8 @@
 module Main exposing (main)
 
 import Browser
-import Browser.Events
 import Html exposing (Html, button, div, input, span, text)
-import Html.Attributes exposing (class, classList, disabled, type_, value)
+import Html.Attributes exposing (class, classList, type_, value)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode
@@ -36,7 +35,7 @@ main =
         { init = \_ -> init
         , view = view
         , update = update
-        , subscriptions = \_ -> subscriptions
+        , subscriptions = \_ -> Sub.none
         }
 
 
@@ -103,8 +102,7 @@ mapMaybeWith fn default maybe =
 
 
 type Msg
-    = Ignored
-    | ClickedNumber Int
+    = ClickedNumber Int
     | ClickedClear
     | ClickedToggleSign
     | ClickedBackspace
@@ -115,81 +113,19 @@ type Msg
 
 
 
--- SUBSCRIPTION
-
-
-subscriptions : Sub Msg
-subscriptions =
-    Browser.Events.onKeyPress
-        (Json.Decode.field "key" Json.Decode.string
-            |> Json.Decode.map handleKey
-        )
-
-
-handleKey : String -> Msg
-handleKey keyValue =
-    case keyValue of
-        "Clear" ->
-            ClickedClear
-
-        "Backspace" ->
-            ClickedBackspace
-
-        "Delete" ->
-            ClickedBackspace
-
-        "+" ->
-            ClickedOperator Add
-
-        "-" ->
-            ClickedOperator Subtract
-
-        "*" ->
-            ClickedOperator Multiply
-
-        "/" ->
-            ClickedOperator Divide
-
-        "." ->
-            ClickedPeriod
-
-        "Enter" ->
-            ClickedEnter
-
-        "=" ->
-            ClickedEnter
-
-        _ ->
-            case String.toInt keyValue of
-                Just number ->
-                    ClickedNumber number
-
-                Nothing ->
-                    Ignored
-
-
-
 -- UPDATE
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Ignored ->
-            ( model, Cmd.none )
-
         ClickedNumber n ->
-            -- Elm limits floats to be this long, apparently
-            if String.length model.inputValue >= 18 then
-                ( model, Cmd.none )
+            case String.toFloat model.inputValue of
+                Nothing ->
+                    ( { model | inputValue = String.fromInt n }, Cmd.none )
 
-            else
-                case String.toFloat model.inputValue of
-                    Nothing ->
-                        ( { model | inputValue = String.fromInt n }, Cmd.none )
-
-                    Just _ ->
-                        ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
+                Just _ ->
+                    ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
 
         ClickedClear ->
             ( initModel, Cmd.none )
@@ -220,10 +156,7 @@ update msg model =
                     ( model, Cmd.none )
 
         ClickedPeriod ->
-            if String.isEmpty model.inputValue then
-                ( { model | inputValue = "0." }, Cmd.none )
-
-            else if String.any ((==) '.') model.inputValue then
+            if String.any ((==) '.') model.inputValue then
                 ( model, Cmd.none )
 
             else
@@ -241,11 +174,11 @@ update msg model =
                 Just expression ->
                     ( model
                     , Http.post
-                        { url = expressionUrl expression "http://localhost:4000"
+                        { url = "http://localhost:5000/api/calculate"
                         , body = Http.jsonBody (encodeExpression expression)
                         , expect =
                             Http.expectJson GotResult
-                                (Json.Decode.field "operationResult"
+                                (Json.Decode.field "calculationResult"
                                     (Json.Decode.oneOf
                                         [ Json.Decode.map Ok Json.Decode.float
                                         , Json.Decode.map Err Json.Decode.string
@@ -274,33 +207,36 @@ update msg model =
             )
 
         GotResult (Err err) ->
+            let
+                err2 =
+                    Debug.log "err" err
+            in
             ( { model | inputValue = "Something went wrong" }, Cmd.none )
 
 
-expressionUrl : Expression -> String -> String
-expressionUrl { operator } baseUrl =
-    let
-        operatorUrl =
-            case operator of
-                Add ->
-                    "sum"
+encodeOperator : Operator -> Json.Encode.Value
+encodeOperator operator =
+    Json.Encode.string
+        (case operator of
+            Add ->
+                "add"
 
-                Subtract ->
-                    "subtract"
+            Subtract ->
+                "subtract"
 
-                Multiply ->
-                    "multiply"
+            Multiply ->
+                "multiply"
 
-                Divide ->
-                    "divide"
-    in
-    String.join "/" [ baseUrl, operatorUrl ]
+            Divide ->
+                "divide"
+        )
 
 
 encodeExpression : Expression -> Json.Encode.Value
-encodeExpression { firstNumber, secondNumber } =
+encodeExpression { firstNumber, operator, secondNumber } =
     Json.Encode.object
         [ ( "firstOperand", Json.Encode.float firstNumber )
+        , ( "operator", encodeOperator operator )
         , ( "secondOperand", Json.Encode.float secondNumber )
         ]
 
@@ -343,7 +279,6 @@ viewInput model =
         , input
             [ class "bg-purple-700 py-6 px-4 text-right text-white text-xl sm:text-2xl w-full"
             , type_ "text"
-            , disabled True
             , value model.inputValue
             ]
             []
