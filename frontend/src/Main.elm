@@ -4,8 +4,11 @@ import Browser
 import Html exposing (Html, button, div, input, span, text)
 import Html.Attributes exposing (class, classList, type_, value)
 import Html.Events exposing (onClick)
+import Http
+import Json.Decode
+import Json.Encode
 import List.Extra as LE
-import Svg exposing (g, rect, svg)
+import Svg exposing (rect, svg)
 import Svg.Attributes
     exposing
         ( d
@@ -106,6 +109,7 @@ type Msg
     | ClickedOperator Operator
     | ClickedPeriod
     | ClickedEnter
+    | GotResult (Result Http.Error (Result String Float))
 
 
 
@@ -116,7 +120,12 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         ClickedNumber n ->
-            ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
+            case String.toFloat model.inputValue of
+                Nothing ->
+                    ( { model | inputValue = String.fromInt n }, Cmd.none )
+
+                Just _ ->
+                    ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
 
         ClickedClear ->
             ( initModel, Cmd.none )
@@ -162,9 +171,74 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-                -- TODO
-                Just _ ->
-                    ( model, Cmd.none )
+                Just expression ->
+                    ( model
+                    , Http.post
+                        { url = "http://localhost:5000/api/calculate"
+                        , body = Http.jsonBody (encodeExpression expression)
+                        , expect =
+                            Http.expectJson GotResult
+                                (Json.Decode.field "calculationResult"
+                                    (Json.Decode.oneOf
+                                        [ Json.Decode.map Ok Json.Decode.float
+                                        , Json.Decode.map Err Json.Decode.string
+                                        ]
+                                    )
+                                )
+                        }
+                    )
+
+        GotResult (Ok (Ok result)) ->
+            ( { model
+                | firstNumber = Nothing
+                , operator = Nothing
+                , inputValue = String.fromFloat result
+              }
+            , Cmd.none
+            )
+
+        GotResult (Ok (Err error)) ->
+            ( { model
+                | firstNumber = Nothing
+                , operator = Nothing
+                , inputValue = error
+              }
+            , Cmd.none
+            )
+
+        GotResult (Err err) ->
+            let
+                err2 =
+                    Debug.log "err" err
+            in
+            ( { model | inputValue = "Something went wrong" }, Cmd.none )
+
+
+encodeOperator : Operator -> Json.Encode.Value
+encodeOperator operator =
+    Json.Encode.string
+        (case operator of
+            Add ->
+                "add"
+
+            Subtract ->
+                "subtract"
+
+            Multiply ->
+                "multiply"
+
+            Divide ->
+                "divide"
+        )
+
+
+encodeExpression : Expression -> Json.Encode.Value
+encodeExpression { firstNumber, operator, secondNumber } =
+    Json.Encode.object
+        [ ( "firstOperand", Json.Encode.float firstNumber )
+        , ( "operator", encodeOperator operator )
+        , ( "secondOperand", Json.Encode.float secondNumber )
+        ]
 
 
 
