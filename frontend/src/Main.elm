@@ -41,7 +41,8 @@ main =
 
 
 type alias Model =
-    { firstNumber : Maybe Float
+    { inputValue : String
+    , firstNumber : Maybe Float
     , operator : Maybe Operator
     , secondNumber : Maybe Float
     }
@@ -49,12 +50,16 @@ type alias Model =
 
 init : ( Model, Cmd msg )
 init =
-    ( { firstNumber = Nothing
-      , operator = Nothing
-      , secondNumber = Nothing
-      }
-    , Cmd.none
-    )
+    ( initModel, Cmd.none )
+
+
+initModel : Model
+initModel =
+    { inputValue = ""
+    , firstNumber = Nothing
+    , operator = Nothing
+    , secondNumber = Nothing
+    }
 
 
 
@@ -73,6 +78,13 @@ listOperators =
     [ Add, Subtract, Multiply, Divide ]
 
 
+type alias Expression =
+    { firstNumber : Float
+    , operator : Operator
+    , secondNumber : Float
+    }
+
+
 type Style
     = Primary
     | Secondary
@@ -83,8 +95,7 @@ type Style
 
 
 type Msg
-    = NoOp
-    | ClickedNumber Int
+    = ClickedNumber Int
     | ClickedClear
     | ClickedToggleSign
     | ClickedBackspace
@@ -100,30 +111,56 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NoOp ->
-            ( model, Cmd.none )
-
-        -- TODO
-        ClickedNumber _ ->
-            ( model, Cmd.none )
+        ClickedNumber n ->
+            ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
 
         ClickedClear ->
-            ( model, Cmd.none )
+            ( initModel, Cmd.none )
 
         ClickedToggleSign ->
-            ( model, Cmd.none )
+            case String.toList model.inputValue of
+                '-' :: rest ->
+                    ( { model | inputValue = String.fromList rest }, Cmd.none )
+
+                _ ->
+                    ( { model | inputValue = "-" ++ model.inputValue }, Cmd.none )
 
         ClickedBackspace ->
-            ( model, Cmd.none )
+            ( { model | inputValue = String.dropRight 1 model.inputValue }, Cmd.none )
 
-        ClickedOperator _ ->
-            ( model, Cmd.none )
+        ClickedOperator operator ->
+            case String.toFloat model.inputValue of
+                Just firstNumber ->
+                    ( { model
+                        | firstNumber = Just firstNumber
+                        , operator = Just operator
+                        , inputValue = ""
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         ClickedPeriod ->
-            ( model, Cmd.none )
+            if String.any ((==) '.') model.inputValue then
+                ( model, Cmd.none )
+
+            else
+                ( { model | inputValue = model.inputValue ++ "." }, Cmd.none )
 
         ClickedEnter ->
-            ( model, Cmd.none )
+            let
+                maybeExpression =
+                    Maybe.map3 Expression model.firstNumber model.operator model.secondNumber
+            in
+            case maybeExpression of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                -- TODO
+                Just _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -134,7 +171,7 @@ view : Model -> Html Msg
 view model =
     div [ class "w-screen h-screen flex items-center justify-center" ]
         [ div [ class "shadow-lg" ]
-            [ viewInput
+            [ viewInput model
             , div [ class "flex" ]
                 [ div [ class "flex flex-col flex-grow" ]
                     [ viewTopRow
@@ -147,13 +184,13 @@ view model =
         ]
 
 
-viewInput : Html Msg
-viewInput =
+viewInput : Model -> Html Msg
+viewInput model =
     div [ class "bg-purple-700 p-2 rounded-tl-lg w-full" ]
         [ input
             [ class "bg-purple-700 py-10 px-4 text-right text-white text-xl sm:text-2xl w-full"
             , type_ "text"
-            , value "Heya"
+            , value model.inputValue
             ]
             []
         ]
@@ -296,7 +333,7 @@ viewButton ({ label, isLarge, style } as options) =
         [ onClick options.onClick
         , class
             (String.join " "
-                [ "min-w-16 min-h-16 min-h-max flex items-center justify-center font-bold"
+                [ "min-w-16 min-h-16 min-h-max flex items-center justify-center font-bold focus:outline-none"
                 , color
                 , background
                 , size
