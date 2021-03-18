@@ -180,15 +180,15 @@ update msg model =
 
         ClickedNumber n ->
             -- Elm limits floats to be this long, apparently
-            if String.length model.inputValue >= 18 then
-                ( model, Cmd.none )
+            case String.toFloat model.inputValue of
+                Nothing ->
+                    ( { model | inputValue = String.fromInt n }, Cmd.none )
 
-            else
-                case String.toFloat model.inputValue of
-                    Nothing ->
-                        ( { model | inputValue = String.fromInt n }, Cmd.none )
+                Just _ ->
+                    if String.length model.inputValue >= 18 then
+                        ( model, Cmd.none )
 
-                    Just _ ->
+                    else
                         ( { model | inputValue = model.inputValue ++ String.fromInt n }, Cmd.none )
 
         ClickedClear ->
