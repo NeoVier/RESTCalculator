@@ -44,7 +44,6 @@ type alias Model =
     { inputValue : String
     , firstNumber : Maybe Float
     , operator : Maybe Operator
-    , secondNumber : Maybe Float
     }
 
 
@@ -58,7 +57,6 @@ initModel =
     { inputValue = ""
     , firstNumber = Nothing
     , operator = Nothing
-    , secondNumber = Nothing
     }
 
 
@@ -88,6 +86,12 @@ type alias Expression =
 type Style
     = Primary
     | Secondary
+
+
+mapMaybeWith : (a -> b) -> b -> Maybe a -> b
+mapMaybeWith fn default maybe =
+    Maybe.map fn maybe
+        |> Maybe.withDefault default
 
 
 
@@ -129,8 +133,8 @@ update msg model =
             ( { model | inputValue = String.dropRight 1 model.inputValue }, Cmd.none )
 
         ClickedOperator operator ->
-            case String.toFloat model.inputValue of
-                Just firstNumber ->
+            case ( String.toFloat model.inputValue, model.firstNumber ) of
+                ( Just firstNumber, Nothing ) ->
                     ( { model
                         | firstNumber = Just firstNumber
                         , operator = Just operator
@@ -139,7 +143,7 @@ update msg model =
                     , Cmd.none
                     )
 
-                Nothing ->
+                _ ->
                     ( model, Cmd.none )
 
         ClickedPeriod ->
@@ -151,10 +155,10 @@ update msg model =
 
         ClickedEnter ->
             let
-                maybeExpression =
-                    Maybe.map3 Expression model.firstNumber model.operator model.secondNumber
+                secondNumber =
+                    String.toFloat model.inputValue
             in
-            case maybeExpression of
+            case Maybe.map3 Expression model.firstNumber model.operator secondNumber of
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -186,9 +190,20 @@ view model =
 
 viewInput : Model -> Html Msg
 viewInput model =
-    div [ class "bg-purple-700 p-2 rounded-tl-lg w-full" ]
-        [ input
-            [ class "bg-purple-700 py-10 px-4 text-right text-white text-xl sm:text-2xl w-full"
+    div [ class "bg-purple-700 py-4 px-2 rounded-tl-lg w-full flex flex-col" ]
+        [ span
+            [ class "text-white text-right w-full pr-2"
+            , classList
+                [ ( "opacity-0"
+                  , mapMaybeWith (\_ -> False) True model.firstNumber
+                  )
+                ]
+            ]
+            [ text
+                (mapMaybeWith String.fromFloat "0" model.firstNumber)
+            ]
+        , input
+            [ class "bg-purple-700 py-6 px-4 text-right text-white text-xl sm:text-2xl w-full"
             , type_ "text"
             , value model.inputValue
             ]
